@@ -1,0 +1,126 @@
+
+https://dbdiagram.io/d/690bc1d16735e1117071503c
+Enum OrderStatus {
+  PENDING
+  ACCEPTED
+  WAITING_PAYMENT_CONFIRMATION
+  WAITINGCONFIRMATION 
+  CANCELED
+}
+Table Products {
+  id BIGINT [pk, increment] 
+  sku VARCHAR(50) [unique, not null]
+  name VARCHAR(255) [not null]
+  category VARCHAR(100)
+  description TEXT
+  price DOUBLE [not null]
+  total_stock INTEGER [not null, default: 0]
+  reserved_stock INTEGER [not null, default: 0]
+
+  Indexes {
+    (sku) [unique]
+  }
+}
+Table Orders {
+  id UUID [pk]
+  user_id VARCHAR(36) [not null] 
+  transaction_id VARCHAR(36) [unique, not null]
+  total DOUBLE [not null]
+  status VARCHAR(50) [not null, default: 'PENDING'] 
+  created_at TIMESTAMP [not null, default: `now()`]
+}
+Table Purchases {
+  purchase_id UUID [pk]
+  introduced_at DATE [not null]
+}
+
+Table StockHistory {
+  id UUID [pk]
+  product_sku VARCHAR(50) [not null]
+  created_at TIMESTAMP [not null, default: `now()`]
+  previous_stock INTEGER
+  new_stock INTEGER [not null]
+  reason VARCHAR(50) [not null]
+}
+
+Table Returns {
+  id UUID [pk]
+  order_id VARCHAR(36) [not null]
+  returned_at TIMESTAMP [not null, default: `now()`]
+  user_id VARCHAR(36)
+  user_email VARCHAR(255)
+  reason TEXT
+  status VARCHAR(50) [not null, default: 'PENDING']
+}
+
+Table Payments {
+  id VARCHAR(36) [pk]
+  order_id VARCHAR(36) [not null]
+  user_id VARCHAR(36)
+  user_email VARCHAR(255)
+  created_at TIMESTAMP [not null, default: `now()`]
+  amount DOUBLE [not null]
+  payment_type VARCHAR(50)
+  currency VARCHAR(10) [not null, default: 'USD']
+  status VARCHAR(50) [not null]
+}
+
+Table Shipping {
+  id UUID [pk]
+  order_id VARCHAR(36) [not null]
+  user_id VARCHAR(36)
+  user_email VARCHAR(255)
+  created_at TIMESTAMP [not null, default: `now()`]
+  status VARCHAR(50) [not null, default: 'PENDING']
+  shipping_address TEXT [not null]
+  sending_at TIMESTAMP
+  estimated_arrival VARCHAR(100) 
+  received_at TIMESTAMP
+  rejected_at TIMESTAMP
+}
+Table purchase_items {
+  purchase_id UUID [not null]
+  product_id BIGINT [not null]
+  quantity INTEGER [not null, default: 1]
+  price DOUBLE [not null] 
+
+  Indexes {
+    (purchase_id, product_id) [pk]
+  }
+}
+
+Table shipping_items {
+  shipping_id UUID [not null]
+  product_id BIGINT [not null]
+  quantity INTEGER [not null]
+
+  Indexes {
+    (shipping_id, product_id) [pk]
+  }
+}
+Table order_items {
+  id BIGINT [pk, increment]
+  order_id UUID [not null]
+  product_id BIGINT [not null]
+  quantity INTEGER [not null, default: 1]
+  price DOUBLE [not null] 
+  amount DOUBLE [not null] 
+
+  Indexes {
+    (order_id, product_id) [unique] 
+  }
+}
+
+Ref: Orders.id > order_items.order_id
+Ref: Products.id > order_items.product_id
+Ref: Orders.transaction_id > Payments.order_id 
+Ref: Orders.transaction_id > Returns.order_id 
+Ref: Orders.transaction_id > Shipping.order_id 
+
+Ref: Products.sku > StockHistory.product_sku 
+
+Ref: Purchases.purchase_id < purchase_items.purchase_id 
+Ref: Products.id < purchase_items.product_id 
+
+Ref: Shipping.id < shipping_items.shipping_id 
+Ref: Products.id < shipping_items.product_id
