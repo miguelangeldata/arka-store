@@ -1,0 +1,205 @@
+https://www.plantuml.com/plantuml/svg/jLTVRzis47_tfo3yicIhYlPj4EgWWgniMXFRa9qMVJ9OyM9paKYNf1nuRR_xI55MJfRYO0Ns4iZtv-x7t_6Eb_VQK6MgiXZf1ovsLD6Iv0NLEZ96yI-LWJINOid_0V86cUWjPVAHYmsvfuK6f16IWOOT-HsRAoeU6k7e5pAPJ4WokxjTkgyHYAeaSyL0BGqrbIRVHeGiajaqdVrXlw8uJXQhP6e_FqNfoWhNY-ZpRJ9RhUFvx3hDRgDLEfyzgK-aSJIBanlh_sFaKoteeGHXpYPRDwBrF9icsMcYQB78vXzhIDCalabdzXCb8YHBhkzcKvHpkUMxdMKB9utY3pxfqkPoKRCi_TYuh-wo6NBFm5HAQEIT9N7IM2zNy_Z3sWeifEnphVihYLSukv7vmvzS6waE6L0jHHqZdSLPueZqv_3VlO3hwsn-k_QGbZPaMxzLEescYQzXVMF8GabMvQOE_kxTuiFL5Gau2ycD59jQL0d-jG8drWzLQ74fNci2GKl0ltDgO6FHOXa3dIk-CrmABDufdblVgQo-5E04HXfQr4SEIIfi751aGjuubG8DQWziM1lOFxznaIkW6cgJYwyL5OQRGsjxsNuvOmR_mNW39jfJNb2BqpjqzHxScLXxoPatpEKUL8OESyRXnyXNnxTOhpPtT-dK7RwomLA6YCNLCeeAJND7FRPfkCRaw_gAXfr-dg062nnX1bXaGhBY9LZxSkVat41f_MwuDkzgvzGAhjgoWD2LWfYAMydu_S4fzKNB2T9dK5fowWXzVPJdi3FFA8yzsbDJnbo-2mSn92quP97J8gyAQc3b-C2--f6RVBkIFZEm8Pr5dKCnhFj4kR6OOYdkkIgfgy0PisQqfSB-mhRe5hJmd-_IwreaQyFcXY3vpZTv-kGHzEwUBVdRmTwafQo4mPAWmrzKwntgngB5lQXKlgKQEh1tZH313BWmDK9_nwRK30JfdF_LzN0ihFtfKwFaU0hto1ycUOcdv73lsAH2FbvS-iImvxBItV7cD08U-q9LFmNXmFFGWcvUddDmqLt1M5NjU0PiR-3KagIal4121D99y8ZfFeeJ_2G60MwE-doP7vg7eUx9u6_8JvgJwwJW6suhU2rLBy8NAGkWYAUcytf4UTZdgNgPYPUhFzXREmzgTTX19r2b58YyVLnjaF7TSZh6v3Rd6PhWmVdPrPzv2n3iE5Vn83ldSwvCmxhxIZ1W_O5t7El3T_Z_BWpYz7G9dA0LCD2DBc9CWTOulFRqzLvC-yNBEh5IV4zFkYO7lXzuPfNdiA_eTWo8GPRhJ32eyjruhW03GxSzziyFtTDH1UnimIthYWecI_VZud9umk3PTIDpMhXNnB5rkgYWew5TvHJ8HJV3A_9iYCkd_JfBRg8udS-Q1TilRz-_1u7yXjxma8npAGpbGfChqbnXSl7szUjVByUZPXyVTECYBoe6Z71XFLkcnoEVAWmxEvyzsHKPlx5XnyVH48PDEXTjIpLffeqUlnZ14zG9KD83sT8z4C_zIq7UZjjhrSEX6yLuT2GW3FL3XG7W5oyCdnvR5y8cp1yqoRTKR43R8EtcqT1u_7t2f2l0qmw1o1_sEfgo4_QFnphw7N_tozqUj9UjxrMRFfiBqThl8kkz0G6Aclg8d8tx_y8tjVA3paN3-_-ekJ1OttrVMY3Ov6HSZZmmRD7T04RTelgUyu7w-yrx4AmgYty1
+@startuml
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam nodesep 80
+skinparam ranksep 80
+
+' === ENUMS ===
+enum OrderStatus {
+  PENDING
+  ACCEPTED
+  WAITING_PAYMENT_CONFIRMATION
+  WAITINGCONFIRMATION
+  CANCELED
+}
+
+enum PaymentStatus {
+  PENDING
+  ACCEPTED_PENDING_ORDER_CONFIRMATION
+  APPROVED
+  DECLINED
+  CANCELED
+  REFUNDED
+}
+
+enum ShippingStatus {
+  PACKING
+  SEND
+  ARRIVED
+  RETURNED
+}
+
+enum ReturnsStatus {
+  RECEIVED
+  STOCK_RECOVERY
+  REJECTED
+}
+
+enum StockHistoryReason {
+  INCREMENT
+  DECREMENT
+  STOCK_RECOVERY_FROM_RETURNS
+}
+
+' === ENTIDADES ===
+class Product {
+  <<PK>> -id: Long
+  <<unique>> -sku: String
+  -name: String
+  -category: String
+  -description: String
+  -price: Double
+  -totalStock: Integer = 0
+  -reservedStock: Integer = 0
+  --
+  +increaseStock(quantity: Integer): Integer
+  +decreaseStock(quantity: Integer): Integer
+  +getAvailableStock(): Integer
+  +reserveStock(quantity: Integer): void
+  +recoverReservedStock(quantity: Integer): void
+}
+
+class Order {
+  <<PK>> -id: UUID
+  -userId: String
+  <<unique>> -transactionId: String
+  -total: Double
+  -status: OrderStatus = PENDING
+  -createdAt: Timestamp
+  -items: List<OrderItem>
+  --
+  +ensureCanModifyItems(): void
+  +ensureCanRemoveOrder(): void
+  +ensureAcceptOrder(): void
+  +ensureShippingOrder(): void
+  +addItem(item: OrderItem): void
+  +calculateTotal(): void
+  +switchToAccepted(): void
+  +switchToCanceled(): void
+  +switchToWaitingConfirmation(): void
+  +switchToWaitingPaymentInitiation(): void
+}
+
+class OrderItem {
+  <<PK>> -id: Long
+  <<FK>> -orderId: UUID
+  <<FK>> -productId: Long
+  -quantity: Integer = 1
+  -price: Double
+  -amount: Double
+  --
+  +calculateAmount(): Double
+}
+
+class Purchase {
+  <<PK>> -purchaseId: UUID
+  -introducedAt: Date
+}
+
+class PurchaseItem {
+  <<PK,FK>> -purchaseId: UUID
+  <<PK,FK>> -productId: Long
+  -quantity: Integer = 1
+  -price: Double
+}
+
+class StockHistory {
+  <<PK>> -id: UUID
+  <<FK>> -productSku: String
+  -createdAt: Timestamp = now()
+  -previousStock: Integer
+  -newStock: Integer
+  -reason: StockHistoryReason
+}
+
+class Return {
+  <<PK>> -id: UUID
+  <<FK>> -orderId: String
+  -returnedAt: Timestamp = now()
+  -userId: String
+  -userEmail: String
+  -reason: String
+  -status: ReturnsStatus = RECEIVED
+  --
+  +switchToStockRecovery(): void
+  +switchToRejected(): void
+  +isEligibleForStockRecovery(): boolean
+}
+
+class Payment {
+  <<PK>> -id: String
+  <<FK>> -orderId: String
+  -userId: String
+  -userEmail: String
+  -createdAt: Timestamp = now()
+  -amount: Double
+  -paymentType: String
+  -currency: String = "USD"
+  -status: PaymentStatus = PENDING
+  --
+  +switchToCanceled(): void
+  +switchToAcceptedPendingOrderConfirmation(): void
+  +switchToAccepted(): void
+  +switchToRejected(): void
+  +switchToRefunded(): void
+}
+
+class Shipping {
+  <<PK>> -id: UUID
+  <<FK>> -orderId: String
+  -userId: String
+  -userEmail: String
+  -createdAt: Timestamp = now()
+  -status: ShippingStatus = PACKING
+  -shippingAddress: String
+  -sendingAt: Timestamp
+  -estimatedArrival: String
+  -receivedAt: Timestamp
+  -rejectedAt: Timestamp
+  --
+  +switchToSend(): void
+  +switchToArrived(): void
+  +switchToReturned(): void
+}
+
+class ShippingItem {
+  <<PK,FK>> -shippingId: UUID
+  <<PK,FK>> -productId: Long
+  -quantity: Integer
+}
+
+class ReturnedShipping {
+  <<PK>> -id: UUID = randomUUID()
+  -reason: String
+  -returnedAt: LocalDateTime
+  -items: List<ShippingItem>
+  --
+  +ReturnedShipping(reason: String, items: List<ShippingItem>)
+}
+
+' === RELACIONES ===
+Order ||--o{ OrderItem : "contains > orderId (1..*)"
+Product ||--o{ OrderItem : "included in > productId"
+
+Order::transactionId --> "0..*" Payment::orderId : "has payments"
+Order::transactionId --> "0..*" Return::orderId : "may have returns"
+Order::transactionId --> "0..1" Shipping::orderId : "has shipping"
+
+Product::sku --> "0..*" StockHistory::productSku : "tracks changes"
+
+Purchase ||--o{ PurchaseItem : "includes > purchaseId"
+Product ||--o{ PurchaseItem : "purchased > productId"
+
+Shipping ||--o{ ShippingItem : "contains > shippingId"
+Product ||--o{ ShippingItem : "shipped > productId"
+
+Shipping --> "0..1" ReturnedShipping : "generates > id"
+
+' === ENUMS ===
+Order::status --> OrderStatus
+Payment::status --> PaymentStatus
+Shipping::status --> ShippingStatus
+Return::status --> ReturnsStatus
+StockHistory::reason --> StockHistoryReason
+@enduml
