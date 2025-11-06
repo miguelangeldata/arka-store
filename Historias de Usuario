@@ -1,0 +1,148 @@
+US-PROD-01: Crear producto
+Como administrador
+quiero crear un producto
+para ofrecerlo en la tienda
+
+Criterios de Aceptación
+
+POST /products → 201
+Campos: name, price, totalStock, sku
+Validación: stock >= 0
+US-PROD-03: Consultar stock disponible
+Como cliente
+quiero ver stock disponible
+para decidir compra
+
+Criterios de Aceptación
+
+GET /products/{id}/available-stock → { "availableStock": 8 }
+US-PROD-04: Reservar stock
+Como Orders
+quiero reservar stock
+para garantizar disponibilidad
+
+Criterios de Aceptación
+
+POST /products/{id}/reserve?quantity=2 → 200
+reservedStock += 2
+US-PROD-05: Confirmar reserva (decrementar)
+Como Orders
+quiero confirmar reserva
+para reducir stock real
+
+Criterios de Aceptación
+
+POST /products/{id}/decrement → 200
+totalStock--, reservedStock--
+US-PROD-06: Recuperar stock (cancelación)
+Como Orders
+quiero liberar reserva
+si se cancela orden
+
+Criterios de Aceptación
+
+POST /products/{id}/recovery → 200
+reservedStock--
+US-PROD-07: Recuperar stock (devolución)
+Como Returns
+quiero sumar stock
+al aprobar devolución
+
+Criterios de Aceptación
+
+POST /products/{id}/recovery-from-return → 200
+totalStock++
+US-ORD-01: Crear orden con items
+Como cliente
+quiero crear orden
+para comprar
+
+Criterios de Aceptación
+
+POST /orders → 201
+Reserva stock
+Estado: PENDING
+Rollback si falla
+US-ORD-03: Cancelar orden
+Como cliente
+quiero cancelar
+si no ha sido pagada
+
+Criterios de Aceptación
+
+PUT /orders/{id}/cancel → 200
+Libera reservedStock
+Estado: CANCELED
+US-ORD-04: Aceptar orden (pago OK)
+Como Payments
+quiero aceptar orden
+para confirmar venta
+
+Criterios de Aceptación
+
+POST /orders/{id}/accept → 200
+Decrementa stock
+Llama a Shipping
+Estado: ACCEPTED
+US-PAY-01: Iniciar pago
+Como cliente
+quiero iniciar pago
+para completar compra
+
+Criterios de Aceptación
+
+POST /payments → transactionId + URL
+Estado: PENDING
+US-PAY-02: Aceptar pago
+Como pasarela
+quiero notificar éxito
+para activar flujo
+
+Criterios de Aceptación
+
+PUT /payments/accept/{txId} → 200
+Valida monto
+Llama a Orders
+Publica PaymentAcceptedEvent
+US-PAY-04: Reembolsar
+Como Returns
+quiero reembolsar
+al aprobar devolución
+
+Criterios de Aceptación
+
+POST /payments/refund → 200
+Estado: REFUNDED
+Evento PaymentRefundedEvent
+US-SHIP-01: Crear envío (auto)
+Como sistema
+quiero crear envío
+cuando pago es aceptado
+
+Criterios de Aceptación
+
+PaymentAcceptedEvent → crea Shipping
+Estado: PACKING
+US-SHIP-04: Solicitar devolución
+Como cliente
+quiero devolver
+dentro de 30 días
+
+Criterios de Aceptación
+
+POST /shipping/{id}/return → 201
+Llama a Returns
+US-NOT-01: Email pago aceptado
+Como cliente
+quiero email de éxito
+
+Criterios de Aceptación
+
+Payment082AcceptedEvent → email
+US-NOT-03: Email reembolso
+Como cliente
+quiero notificación de reembolso
+
+Criterios de Aceptación
+
+PaymentRefundedEvent → email
