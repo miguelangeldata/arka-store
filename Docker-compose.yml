@@ -1,0 +1,435 @@
+version: '3.9'
+
+services:
+  #Rabbit
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    hostname: my-rabbit
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+    healthcheck:
+      test: ["CMD", "rabbitmqctl", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Local--Stack
+  localstack:
+    image: localstack/localstack:latest
+    container_name: localstack-sandbox
+    ports:
+      - "4566:4566"
+      - "4571:4571"
+    environment:
+      - SERVICES=ec2,s3,sqs,sns,dynamodb,lambda,secretsmanager,ssm
+      - DEFAULT_REGION=us-east-1
+      - DEBUG=1
+      - DOCKER_HOST=unix:///var/run/docker.sock
+    volumes:
+      - "./localstack-data:/var/lib/localstack"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -f http://localhost:4566/health || true" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Eureka
+  eureka-server:
+    image: miguelangelcardonaduque/arka-eureka:latest
+    container_name: eureka-server
+    ports:
+      - "8761:8761"
+    environment:
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8761/eureka
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8761"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+    depends_on:
+      localstack:
+        condition: service_healthy
+    restart: unless-stopped
+
+  #  API GATEWAY
+  gateway:
+    image: miguelangelcardonaduque/arka-gateway:latest
+    container_name: gateway
+    ports:
+
+      - "8090:8090"
+    environment:
+
+      - SERVER_PORT=8090
+
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8761/eureka
+
+      - EUREKA_INSTANCE_HOSTNAME=gateway
+      - EUREKA_INSTANCE_INSTANCE_ID=gateway-service:8090
+
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8090/actuator/health" ]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+    restart: unless-stopped
+
+  #Purchases
+  purchases:
+    image: miguelangelcardonaduque/arka-purchases:latest
+    container_name: purchases
+    ports:
+      - "8082:8082"
+    environment:
+
+      - SPRING_DATASOURCE_URL=jdbc:h2:mem:purchase;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
+      - SPRING_DATASOURCE_DRIVERCLASSNAME=org.h2.Driver
+      - SPRING_DATASOURCE_USERNAME=sa
+      - SPRING_DATASOURCE_PASSWORD=sa
+      - SPRING_H2_CONSOLE_ENABLED=true
+      - SPRING_H2_CONSOLE_PATH=/h2-console
+
+
+      - SPRING_APPLICATION_NAME=purchases-service
+      - SERVER_PORT=8082
+
+
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8761/eureka
+      - EUREKA_CLIENT_REGISTER_WITH_EUREKA=true
+      - EUREKA_CLIENT_FETCH_REGISTRY=true
+      - EUREKA_INSTANCE_PREFER_IP_ADDRESS=true
+      - EUREKA_INSTANCE_HOSTNAME=purchases
+      - EUREKA_INSTANCE_INSTANCE_ID=${SPRING_APPLICATION_NAME}:${SERVER_PORT}
+
+      - AWS_ENDPOINT_URL=http://localstack:4566
+      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+    restart: unless-stopped
+  #Reports
+  reports:
+    image: miguelangelcardonaduque/arka-reports:latest
+    container_name: reports
+    ports:
+      - "8086:8086"
+    environment:
+
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://host.docker.internal:5432/reports
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=simple123
+      - SPRING_DATASOURCE_DRIVERCLASSNAME=org.postgresql.Driver
+
+
+      - SPRING_JPA_DATABASE=postgresql
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=update
+      - SPRING_JPA_SHOW_SQL=true
+      - SPRING_APPLICATION_NAME=reports-service
+      - SERVER_PORT=8086
+
+
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8761/eureka
+      - EUREKA_CLIENT_REGISTER_WITH_EUREKA=true
+      - EUREKA_CLIENT_FETCH_REGISTRY=true
+      - EUREKA_INSTANCE_PREFER_IP_ADDRESS=true
+      - EUREKA_INSTANCE_HOSTNAME=reports
+      - EUREKA_INSTANCE_INSTANCE_ID=${SPRING_APPLICATION_NAME}:${SERVER_PORT}
+      - AWS_ENDPOINT_URL=http://localstack:4566
+      - AWS_REGION=us-east-1
+
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+
+    restart: unless-stopped
+  #Products
+  products:
+    image: miguelangelcardonaduque/arka-products:latest
+    container_name: products
+    ports:
+      - "8081:8081"
+    environment:
+
+      - SPRING_R2DBC_URL=r2dbc:postgresql://host.docker.internal:5432/products
+      - SPRING_R2DBC_USERNAME=postgres
+      - SPRING_R2DBC_PASSWORD=simple123
+      - SPRING_R2DBC_INITIALIZATION_MODE=always
+
+
+      - SPRING_SQL_INIT_MODE=always
+
+
+      - RESILIENCE4J_CIRCUITBREAKER_INSTANCES_PRODUCTS-CB_FAILURE-RATE-THRESHOLD=50
+      - RESILIENCE4J_CIRCUITBREAKER_INSTANCES_PRODUCTS-CB_SLIDING-WINDOW-SIZE=10
+      - RESILIENCE4J_CIRCUITBREAKER_INSTANCES_PRODUCTS-CB_SLIDING-WINDOW-TYPE=COUNT_BASED
+      - RESILIENCE4J_CIRCUITBREAKER_INSTANCES_PRODUCTS-CB_WAIT-DURATION-IN-OPEN-STATE=10s
+      - RESILIENCE4J_CIRCUITBREAKER_INSTANCES_PRODUCTS-CB_PERMITTED-NUMBER-OF-CALLS-IN-HALF-OPEN-STATE=3
+
+
+      - LOGGING_LEVEL_REACTOR_NETTY_HTTP_CLIENT=DEBUG
+      - LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_WEB_REACTIVE=DEBUG
+
+
+      - SPRING_APPLICATION_NAME=products-service
+      - SERVER_PORT=8081
+
+
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8761/eureka
+      - EUREKA_CLIENT_REGISTER_WITH_EUREKA=true
+      - EUREKA_CLIENT_FETCH_REGISTRY=true
+      - EUREKA_INSTANCE_PREFER_IP_ADDRESS=true
+      - EUREKA_INSTANCE_HOSTNAME=products
+      - EUREKA_INSTANCE_INSTANCE_ID=${SPRING_APPLICATION_NAME}:${SERVER_PORT}
+
+
+      - AWS_ENDPOINT_URL=http://localstack:4566
+      - AWS_REGION=us-east-1
+
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+
+    restart: unless-stopped
+  #Orders
+  orders:
+    image: miguelangelcardonaduque/arka-orders:latest
+    container_name: orders
+    ports:
+      - "8080:8080"
+    environment:
+
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://host.docker.internal:5432/orders
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=simple123
+      - SPRING_DATASOURCE_DRIVERCLASSNAME=org.postgresql.Driver
+
+
+      - SPRING_JPA_DATABASE=postgresql
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=update
+      - SPRING_JPA_SHOW_SQL=true
+
+
+      - RESILIENCE4J_RETRY_INSTANCES_PAYMENTINITBACKOFFRETRY_MAXATTEMPTS=4
+      - RESILIENCE4J_RETRY_INSTANCES_PAYMENTINITBACKOFFRETRY_WAITDURATION=1000
+      - RESILIENCE4J_RETRY_INSTANCES_PAYMENTINITBACKOFFRETRY_ENABLEEXPONENTIALBACKOFF=true
+      - RESILIENCE4J_RETRY_INSTANCES_PAYMENTINITBACKOFFRETRY_EXPONENTIALBACKOFFMULTIPLIER=2.0
+      - RESILIENCE4J_RETRY_INSTANCES_PAYMENTINITBACKOFFRETRY_EXPONENTIALBACKOFFMAXWAIT=5000
+
+
+      - SPRING_APPLICATION_NAME=orders-service
+      - SERVER_PORT=8080
+
+
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8761/eureka
+      - EUREKA_CLIENT_REGISTER_WITH_EUREKA=true
+      - EUREKA_CLIENT_FETCH_REGISTRY=true
+      - EUREKA_INSTANCE_PREFER_IP_ADDRESS=true
+      - EUREKA_INSTANCE_HOSTNAME=orders
+      - EUREKA_INSTANCE_INSTANCE_ID=${SPRING_APPLICATION_NAME}:${SERVER_PORT}
+
+
+      - AWS_ENDPOINT_URL=http://localstack:4566
+      - AWS_REGION=us-east-1
+
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+
+    restart: unless-stopped
+  #Payments
+  payments:
+    image: miguelangelcardonaduque/arka-payments:latest
+    container_name: payments
+    ports:
+      - "8083:8083"
+    environment:
+
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://host.docker.internal:5432/payments
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=simple123
+      - SPRING_DATASOURCE_DRIVERCLASSNAME=org.postgresql.Driver
+
+
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=update
+      - SPRING_JPA_SHOW_SQL=true
+
+
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - SPRING_RABBITMQ_PORT=5672
+      - SPRING_RABBITMQ_USERNAME=guest
+      - SPRING_RABBITMQ_PASSWORD=guest
+      - SPRING_RABBITMQ_LISTENER_SIMPLE_AUTO_STARTUP=false
+
+
+      - SPRING_CLOUD_FUNCTION_DEFINITION=paymentAcceptedSupplier;paymentRejectedSupplier
+      - SPRING_CLOUD_STREAM_BINDINGS_PAYMENTACCEPTEDSUPPLIER-OUT-0_DESTINATION=payment.accepted.exchange
+      - SPRING_CLOUD_STREAM_BINDINGS_PAYMENTACCEPTEDSUPPLIER-OUT-0_CONTENT_TYPE=application/json
+      - SPRING_CLOUD_STREAM_BINDINGS_PAYMENTACCEPTEDSUPPLIER-OUT-0_PRODUCER_DURABLE_EXPRESSION=true
+
+
+      - RESILIENCE4J_RETRY_INSTANCES_ORDERSERVICEBACKOFFRETRY_MAXATTEMPTS=4
+      - RESILIENCE4J_RETRY_INSTANCES_ORDERSERVICEBACKOFFRETRY_WAITDURATION=1000
+      - RESILIENCE4J_RETRY_INSTANCES_ORDERSERVICEBACKOFFRETRY_ENABLEEXPONENTIALBACKOFF=true
+      - RESILIENCE4J_RETRY_INSTANCES_ORDERSERVICEBACKOFFRETRY_EXPONENTIALBACKOFFMULTIPLIER=2.0
+      - RESILIENCE4J_RETRY_INSTANCES_ORDERSERVICEBACKOFFRETRY_EXPONENTIALBACKOFFMAXWAIT=5000
+
+      - RESILIENCE4J_CIRCUITBREAKER_INSTANCES_ORDERSERVICECIRCUITBREAKER_FAILURERATETHRESHOLD=50
+      - RESILIENCE4J_CIRCUITBREAKER_INSTANCES_ORDERSERVICECIRCUITBREAKER_WAITDURATIONINOPENSTATE=30s
+      - RESILIENCE4J_CIRCUITBREAKER_INSTANCES_ORDERSERVICECIRCUITBREAKER_SLIDINGWINDOWTYPE=COUNT_BASED
+      - RESILIENCE4J_CIRCUITBREAKER_INSTANCES_ORDERSERVICECIRCUITBREAKER_SLIDINGWINDOWSIZE=10
+
+
+      - SPRING_APPLICATION_NAME=payments-service
+      - SERVER_PORT=8083
+
+
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8761/eureka
+      - EUREKA_CLIENT_REGISTER_WITH_EUREKA=true
+      - EUREKA_CLIENT_FETCH_REGISTRY=true
+      - EUREKA_INSTANCE_PREFER_IP_ADDRESS=true
+      - EUREKA_INSTANCE_HOSTNAME=payments
+      - EUREKA_INSTANCE_INSTANCE_ID=${SPRING_APPLICATION_NAME}:${SERVER_PORT}
+
+
+      - AWS_ENDPOINT_URL=http://localstack:4566
+      - AWS_REGION=us-east-1
+
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+    restart: unless-stopped
+  #Shipping
+  shipping:
+    image: miguelangelcardonaduque/arka-shipping:latest
+    container_name: shipping
+    ports:
+      - "8084:8084"
+    environment:
+
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://host.docker.internal:5432/shipping
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=simple123
+      - SPRING_DATASOURCE_DRIVERCLASSNAME=org.postgresql.Driver
+
+
+      - SPRING_JPA_DATABASE=postgresql
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=update
+      - SPRING_JPA_SHOW_SQL=true
+
+
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - SPRING_RABBITMQ_PORT=5672
+      - SPRING_RABBITMQ_USERNAME=guest
+      - SPRING_RABBITMQ_PASSWORD=guest
+
+
+      - SPRING_CLOUD_FUNCTION_DEFINITION=shippingSendSupplier
+      - SPRING_CLOUD_STREAM_BINDINGS_SHIPPINGSENDEVENTLISTENER-OUT-0_DESTINATION=shipping.send.exchange
+      - SPRING_CLOUD_STREAM_BINDINGS_SHIPPINGSENDEVENTLISTENER-OUT-0_CONTENT_TYPE=application/json
+      - SPRING_CLOUD_STREAM_BINDINGS_SHIPPINGSENDEVENTLISTENER-OUT-0_PRODUCER_DURABLE_EXPRESSION=true
+
+
+      - SPRING_APPLICATION_NAME=shipping-service
+      - SERVER_PORT=8084
+
+
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8761/eureka
+      - EUREKA_CLIENT_REGISTER_WITH_EUREKA=true
+      - EUREKA_CLIENT_FETCH_REGISTRY=true
+      - EUREKA_INSTANCE_PREFER_IP_ADDRESS=true
+      - EUREKA_INSTANCE_HOSTNAME=shipping
+      - EUREKA_INSTANCE_INSTANCE_ID=${SPRING_APPLICATION_NAME}:${SERVER_PORT}
+
+
+      - AWS_ENDPOINT_URL=http://localstack:4566
+      - AWS_REGION=us-east-1
+
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+    restart: unless-stopped
+  #Notification
+  notifications:
+
+    image: miguelangelcardonaduque/arka-notifications:latest
+    container_name: notifications
+    ports:
+
+      - "8085:8085"
+    environment:
+
+      - SPRING_APPLICATION_NAME=notifications-service
+      - SERVER_PORT=8085
+
+
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - SPRING_RABBITMQ_PORT=5672
+      - SPRING_RABBITMQ_USERNAME=guest
+      - SPRING_RABBITMQ_PASSWORD=guest
+
+
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8761/eureka
+
+      - EUREKA_CLIENT_REGISTER_WITH_EUREKA=true
+      - EUREKA_CLIENT_FETCH_REGISTRY=true
+      - EUREKA_INSTANCE_PREFER_IP_ADDRESS=true
+      - EUREKA_INSTANCE_HOSTNAME=notifications
+      - EUREKA_INSTANCE_INSTANCE_ID=${SPRING_APPLICATION_NAME}:${SERVER_PORT}
+
+
+      - SPRING_MAIL_HOST=smtp.gmail.com
+      - SPRING_MAIL_PORT=587
+      - SPRING_MAIL_USERNAME=arkastorenotification@gmail.com
+      - SPRING_MAIL_PASSWORD=mtmb abku ikdn bfll
+
+
+      - AWS_ENDPOINT_URL=http://localstack:4566
+      - AWS_REGION=us-east-1
+
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+    restart: unless-stopped
+
+networks:
+  default:
+    name: arka-cloud-network
